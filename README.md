@@ -10,8 +10,7 @@
 | **Network** | Ethereum Sepolia testnet (chainId 11155111) |
 | **Contract address** | `0xD3F00c78866F8Fb9c450b8097116100696e95EaC` |
 | **Etherscan** | https://sepolia.etherscan.io/address/0xD3F00c78866F8Fb9c450b8097116100696e95EaC |
-| **Live demo / repo** | https://github.com/msafidm/MG3012-Assignment2-dApp | Live: https://msafidm.github.io/MG3012-Assignment2-dApp/
- |
+| **repo** | https://github.com/msafidm/MG3012-Assignment2-dApp |
 | **Live demo** | Live: https://msafidm.github.io/MG3012-Assignment2-dApp/ |
 
 ## 📌 Project Description
