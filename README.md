@@ -12,6 +12,7 @@
 | **Etherscan** | https://sepolia.etherscan.io/address/0xD3F00c78866F8Fb9c450b8097116100696e95EaC |
 | **Live demo / repo** | https://github.com/msafidm/MG3012-Assignment2-dApp | Live: https://msafidm.github.io/MG3012-Assignment2-dApp/
  |
+| **Live demo** | Live: https://msafidm.github.io/MG3012-Assignment2-dApp/ |
 
 ## 📌 Project Description
 A mini decentralized application where anyone can post feedback with a 1-5 star rating. Entries are stored permanently on the blockchain and displayed on a web page. The frontend uses **HTML, CSS and JavaScript** with **ethers.js v5.7.2** and **MetaMask**.
