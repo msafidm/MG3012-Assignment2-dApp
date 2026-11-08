@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Student Feedback Board dApp</title>
+
+  <!-- External CSS file -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Inline <style> tag (extra styling) -->
+  <style>
+    #txResult { word-break: break-all; margin-top: .5rem; }
+    .small { font-size: .9rem; opacity: .85; }
+  </style>
+
+  <!-- Ethers.js v5.7.2 (same library/version used in Week 8) -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+</head>
+
+<body>
+  <header>
+    <!-- Image (inline SVG, no external file needed) -->
+    <img alt="Blockchain cube logo" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,8 90,30 90,70 50,92 10,70 10,30' fill='%236366f1'/><polygon points='50,8 90,30 50,52 10,30' fill='%23a5b4fc'/><polygon points='50,52 90,30 90,70 50,92' fill='%234338ca'/></svg>" />
+    <h1>⭐ Student Feedback Board</h1>
+    <p>MG3012 Blockchain Technology for Business - Assignment 2 (Sepolia Testnet)</p>
+  </header>
+
+  <main>
+    <!-- 1. CONNECT -->
+    <section>
+      <h2>🦊 1. Connect Wallet</h2>
+      <p>Status: <span id="status">Not connected</span></p>
+      <p>Account: <code id="account">-</code></p>
+      <p>Network: <span class="badge" id="network">-</span></p>
+      <button onclick="connectWallet()">🔗 Connect MetaMask</button>
+    </section>
+
+    <!-- 2. READ -->
+    <section>
+      <h2>📖 2. Board Statistics (read)</h2>
+      <p>Total feedback entries: <strong id="count">-</strong></p>
+      <p>Average rating: <strong id="average">-</strong></p>
+      <button onclick="loadBoard()">🔄 Refresh Board</button>
+    </section>
+
+    <!-- 3. WRITE -->
+    <section>
+      <h2>✍️ 3. Post Feedback (write)</h2>
+      <p class="small">This sends a transaction. MetaMask will ask you to confirm and pay a little Sepolia gas.</p>
+      <input id="name" placeholder="Your name" maxlength="40" />
+      <textarea id="message" rows="3" placeholder="Your feedback (max 200 characters)" maxlength="200"></textarea>
+      <select id="rating">
+        <option value="5">5 - Excellent</option>
+        <option value="4">4 - Good</option>
+        <option value="3">3 - Average</option>
+        <option value="2">2 - Poor</option>
+        <option value="1">1 - Very poor</option>
+      </select>
+      <button id="postBtn" onclick="postFeedback()">📨 Post Feedback</button>
+      <p id="txResult"></p>
+    </section>
+
+    <!-- 4. LIST -->
+    <section>
+      <h2>💬 4. Latest Feedback</h2>
+      <ul id="feedbackList"></ul>
+    </section>
+
+    <!-- INFO -->
+    <section>
+      <h2>ℹ️ About this dApp</h2>
+      <p>Everything posted here is stored permanently on the Ethereum Sepolia testnet.</p>
+      <ol>
+        <li>Connect MetaMask (Sepolia network).</li>
+        <li>Read functions are free.</li>
+        <li>Write functions need a signed transaction and gas.</li>
+      </ol>
+      <ul>
+        <li><a href="https://sepolia.etherscan.io" target="_blank" rel="noopener">Sepolia Etherscan</a></li>
+        <li><a href="https://remix.ethereum.org" target="_blank" rel="noopener">Remix IDE</a></li>
+        <li><a href="https://docs.ethers.org/v5/" target="_blank" rel="noopener">ethers.js v5 docs</a></li>
+      </ul>
+      <p>Contract address:
+        <a id="contractLink" href="#" target="_blank" rel="noopener"><code id="contractText"></code></a>
+      </p>
+    </section>
+  </main>
+
+  <footer>Built by Safiullah Shakeel - 24i-5517 | Instructor: Dr. Usama Arshad</footer>
+
+  <script>
+    // 🏠 Replace with YOUR deployed contract address from Remix
+    const contractAddress = "0xD3F00c78866F8Fb9c450b8097116100696e95EaC";
+
+    // 📜 ABI: only the functions we call from the frontend
+    const contractABI = [
+      "function postFeedback(string _name, string _message, uint _rating)",
+      "function clearFeedback()",
+      "function getFeedbackCount() view returns (uint)",
+      "function getFeedback(uint index) view returns (address, string, string, uint, uint)",
+      "function getAverageRating() view returns (uint)"
+    ];
+
+    const SEPOLIA_CHAIN_ID = 11155111;
+    let provider, signer, contract;
+
+    document.getElementById("contractText").textContent = contractAddress;
+    document.getElementById("contractLink").href = "https://sepolia.etherscan.io/address/" + contractAddress;
+
+    // Show a message in the status line
+    function setStatus(text, cls) {
+      const el = document.getElementById("status");
+      el.textContent = text;
+      el.className = cls || "";
+    }
+
+    // Escape text so user input cannot inject HTML
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+
+    // 💰 Connect MetaMask
+    async function connectWallet() {
+      if (!window.ethereum) {
+        alert("Please install MetaMask!");
+        setStatus("MetaMask not found", "err");
+        return;
+      }
+      try {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        const accounts = await provider.send("eth_requestAccounts", []);
+
+        // Make sure we are on Sepolia, otherwise ask MetaMask to switch
+        let net = await provider.getNetwork();
+        if (net.chainId !== SEPOLIA_CHAIN_ID) {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: "0xaa36a7" }]
+          });
+          provider = new ethers.providers.Web3Provider(window.ethereum);
+          net = await provider.getNetwork();
+        }
+
+        signer = provider.getSigner();
+        contract = new ethers.Contract(contractAddress, contractABI, signer);
+
+        document.getElementById("account").textContent = accounts[0];
+        document.getElementById("network").textContent = "Sepolia (chainId " + net.chainId + ")";
+        setStatus("Connected ✅", "ok");
+        await loadBoard();
+      } catch (err) {
+        setStatus("Connection failed: " + (err.message || err), "err");
+      }
+    }
+
+    // Read-only contract (works even before wallet connect if MetaMask exists)
+    async function getReadContract() {
+      if (contract) return contract;
+      if (!window.ethereum) throw new Error("MetaMask not installed");
+      const p = new ethers.providers.Web3Provider(window.ethereum);
+      return new ethers.Contract(contractAddress, contractABI, p);
+    }
+
+    // 📖 READ: count, average and latest 5 feedbacks
+    async function loadBoard() {
+      try {
+        const c = await getReadContract();
+        const count = await c.getFeedbackCount();
+        const avg = await c.getAverageRating();
+
+        document.getElementById("count").textContent = count.toString();
+        document.getElementById("average").textContent =
+          count.toNumber() === 0 ? "No ratings yet" : (avg.toNumber() / 100).toFixed(2) + " / 5";
+
+        const list = document.getElementById("feedbackList");
+        list.innerHTML = "";
+        const total = count.toNumber();
+        if (total === 0) {
+          list.innerHTML = "<li>No feedback yet. Be the first!</li>";
+          return;
+        }
+        for (let i = total - 1; i >= 0 && i >= total - 5; i--) {
+          const f = await c.getFeedback(i);
+          const stars = "★".repeat(f[3].toNumber()) + "☆".repeat(5 - f[3].toNumber());
+          const when = new Date(f[4].toNumber() * 1000).toLocaleString();
+          const li = document.createElement("li");
+          li.innerHTML = "<strong>" + esc(f[1]) + "</strong> <span class='stars'>" + stars + "</span><br>" +
+            esc(f[2]) + "<br><span class='small'>" + when + " | from " + f[0].slice(0, 6) + "..." + f[0].slice(-4) + "</span>";
+          list.appendChild(li);
+        }
+      } catch (err) {
+        document.getElementById("txResult").innerHTML = "<span class='err'>Read failed: " + esc(err.message || err) + "</span>";
+      }
+    }
+
+    // ✍️ WRITE: send feedback transaction
+    async function postFeedback() {
+      const result = document.getElementById("txResult");
+      if (!contract) { await connectWallet(); if (!contract) return; }
+
+      const name = document.getElementById("name").value.trim();
+      const message = document.getElementById("message").value.trim();
+      const rating = document.getElementById("rating").value;
+      if (!name || !message) {
+        result.innerHTML = "<span class='err'>Please enter your name and a message.</span>";
+        return;
+      }
+
+      const btn = document.getElementById("postBtn");
+      try {
+        btn.disabled = true;
+        result.textContent = "⏳ Waiting for MetaMask confirmation...";
+        const tx = await contract.postFeedback(name, message, rating);
+
+        const link = "https://sepolia.etherscan.io/tx/" + tx.hash;
+        result.innerHTML = "📤 Transaction sent: <a href='" + link + "' target='_blank' rel='noopener'><code>" + tx.hash +
+          "</code></a><br>⏳ Waiting for it to be mined...";
+
+        const receipt = await tx.wait();
+        result.innerHTML = "<span class='ok'>✅ Confirmed in block " + receipt.blockNumber + "</span><br>Hash: " +
+          "<a href='" + link + "' target='_blank' rel='noopener'><code>" + tx.hash + "</code></a>";
+
+        document.getElementById("message").value = "";
+        await loadBoard();
+      } catch (err) {
+        result.innerHTML = "<span class='err'>❌ Transaction failed: " + esc(err.message || err) + "</span>";
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Reload if the user switches account or network in MetaMask
+    if (window.ethereum) {
+      window.ethereum.on("accountsChanged", () => location.reload());
+      window.ethereum.on("chainChanged", () => location.reload());
+    }
+
+    // Show board data when the page opens
+    window.onload = loadBoard;
+  </script>
+</body>
+</html>
